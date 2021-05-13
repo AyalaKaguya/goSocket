@@ -7,14 +7,14 @@ import json
 
 SERV = "127.0.0.1"
 PORT = 25538
+CodingFormat = "utf-8"  # 定义全局编码格式
 
 logging.basicConfig(format="%(asctime)s %(thread)d %(threadName)s %(message)s",
                     stream=sys.stdout, level=logging.INFO)
 log = logging.getLogger()
 
-CodingFormat = "utf-8"  # 定义全局编码格式
 
-'''一些定义
+'''
 Public 频道
 承载基础指令和错误反馈
 不接受json信息
@@ -30,6 +30,8 @@ Return Code Definition：
     502     The instruction does not define a keyword
     503     The JSON information parameter sent is incorrect
     504     Exit channel when not in channel
+    505     Wrong data type
+    506     You must specify parameters for data
 '''
 
 help_document = '''
@@ -55,45 +57,43 @@ class MainHandler(socketserver.BaseRequestHandler):
         msg = "Server:[{}:{}]:{}".format(
             self.client_address[0], self.client_address[1], "加入了服务器").encode()
 
+        log.info("Connection:'{}:{}'".format(
+            self.client_address[0], self.client_address[1]))
+
         with self.lock:
             self.clients[self.client_address] = self.request
-            self.ChanelJoin()
             for c, sk in self.clients.items():  # 递归连接池，连接发送信息
                 try:
                     sk.send(msg)
                 except:
                     pass
-
-        log.info("Connection:'{}:{}'".format(
-            self.client_address[0], self.client_address[1]))
+            self.ChanelJoin()
 
     def handle(self):
         super().handle()
         sock: socket.socket = self.request
 
         while not self.event.is_set():
-
+            # 监听消息
             try:
                 data = sock.recv(1024).decode(CodingFormat)
             except Exception as e:
                 log.error(e)
                 break
 
+            # 常见的退出字符串
             if not data or data == '':
                 continue
             elif data in {'exit'}:
                 break
 
+            # 当不是json时当作指令处理
             try:
                 jsonData = json.loads(data)
+                self.ChanelRouter(jsonData)
             except:
-                self.PublicExec(data.split(' '), sock)
+                self.PublicExec(data.split(' '))
                 continue
-
-            '''
-            以下处理消息事件
-            '''
-            self.ChanelRouter(jsonData, sock, data)
 
     def finish(self):
         super().finish()
@@ -115,12 +115,13 @@ class MainHandler(socketserver.BaseRequestHandler):
         log.info("Exit:'{}:{}'".format(
             self.client_address[0], self.client_address[1]))
 
-    def PublicExec(self, command, sock):
+    def PublicExec(self, command: list) -> None:
+        sock: socket.socket = self.request
         try:
             if command[0] == 'send':
-                msg = "[{}:{}]:{}".format(
-                    self.client_address[0], self.client_address[1], ' '.join(command[1:]))
-                self.ChanelSend('Public', msg)
+                data = json.dumps({'target': '{}:{}'.format(
+                    self.client_address[0], self.client_address[1]), 'type': 'msg', 'msg': command[1:]})
+                self.ChanelSend('Public', data)
                 return
             elif command[0] == 'help':
                 msg = help_document.encode()
@@ -128,17 +129,14 @@ class MainHandler(socketserver.BaseRequestHandler):
                 return
             elif command[0] == 'join':
                 if len(command) < 2:
-                    sock.send(json.dumps({'chanel': 'Public', 'data': {
-                        'code': 502, 'msg': '请输入频道名称', 'type': 'message.error'}}).encode())
+                    self.error(502, 'Please enter the channel name')
                     return
                 self.ChanelJoin(command[1])
-                sock.send(json.dumps({'chanel': 'Public', 'data': {
-                    'code': 200, 'msg': "加入频道'%s'成功" % command[1], 'type': 'message.succeed'}}).encode())
                 return
             elif command[0] == 'leave':
                 if len(command) < 2:
-                    sock.send(json.dumps({'chanel': 'Public', 'data': {
-                        'code': 502, 'msg': '请输入频道名称', 'type': 'message.error'}}).encode())
+                    self.error(502, 'Please enter the channel name')
+                    return
                 self.ChanelLeave(command[1])
                 return
             elif command[0] == 'back_def':
@@ -149,22 +147,77 @@ class MainHandler(socketserver.BaseRequestHandler):
             sock.send("Server Error:\n\tUndefined command '{}'\n\tType 'help' to get some commands.".format(
                 ' '.join(command)).encode())
         except Exception as ex:
-            sock.send(json.dumps({'chanel': 'Public', 'data': {
-                'code': 500, 'msg': 'Server Error！', 'type': 'message.crash', 'except': ex}}).encode())
+            self.crash('Server Error！', ex)
             log.error("On exec error:'{}:{}' -> {}".format(
                 self.client_address[0], self.client_address[1], ex))
 
-    def ChanelRouter(self, jsonData, sock, data):
+    def sendAll(self, msg) -> None:
+        '''
+        向所有连接发送信息
+        将出错连接踢出连接池
+        '''
+        msg = str(msg).encode()
+        expc = []
+        with self.lock:
+            for c, sk in self.clients.items():
+                try:
+                    sk.send(msg)
+                except:
+                    expc.append(c)
+            for c in expc:
+                self.clients.pop(c)
+
+    def error(self, code: int, msg: str) -> None:
+        '''
+        向连接发送异常
+        '''
+        sock: socket.socket = self.request
+        sock.send(json.dumps({'chanel': 'Public', 'data': {
+            'code': code, 'msg': msg, 'type': 'message.error'}}).encode())
+
+    def crash(self, msg: str, ex: Exception) -> None:
+        '''
+        向连接发送不可预料的错误
+        '''
+        sock: socket.socket = self.request
+        sock.send(json.dumps({'chanel': 'Public', 'data': {
+            'code': 500, 'msg': msg, 'type': 'message.crash', 'except': ex}}).encode())
+
+    def success(self, msg: str, **payloads: dict) -> None:
+        '''
+        向连接发送成功的信息
+        '''
+        sock: socket.socket = self.request
+        if payloads:
+            data = {'msg': msg}
+            data.update(payloads)
+            data.update({'code': 200, 'type': 'message.succeed'})
+            sock.send(json.dumps({'chanel': 'Public', 'data': data}).encode())
+        else:
+            sock.send(json.dumps({'chanel': 'Public', 'data': {
+                'code': 200, 'msg': msg, 'type': 'message.succeed'}}).encode())
+
+    def ChanelRouter(self, jsonData) -> None:
+        '''
+        通道路由
+        jsonData: 处理成功的原始信息
+        '''
         try:
             if not jsonData['chanel'] in self.chanels:
-                sock.send(json.dumps({'chanel': 'Public', 'data': {
-                    'code': 501, 'msg': '没有这个频道', 'type': 'message.error'}}).encode())
-            self.ChanelSend(jsonData['chanel'], data)
+                self.error(501, 'There is no such channel')
+                return
+            try:
+                if not isinstance(jsonData['data'], str):
+                    self.error(505, 'Wrong data type')
+                    return
+            except:
+                self.error(506, 'You must specify parameters for data')
+                return
+            self.ChanelSend(jsonData['chanel'], jsonData['data'])
         except:
-            sock.send(json.dumps({'chanel': 'Public', 'data': {
-                      'code': 503, 'msg': '错误的参数', 'type': 'message.error'}}).encode())
+            self.error(503, 'Wrong parameter')
 
-    def ChanelFresh(self):
+    def ChanelFresh(self) -> None:
         '''
         !暂时有问题
         剔除空的频道
@@ -175,7 +228,7 @@ class MainHandler(socketserver.BaseRequestHandler):
             if len(ls) == 0 and not ch == 'Public':
                 expc.append(ch)
 
-    def ChanelJoin(self, chanelName='Public'):
+    def ChanelJoin(self, chanelName='Public') -> None:
         '''
         加入指定的频道
         如果不存在，则创建
@@ -186,32 +239,33 @@ class MainHandler(socketserver.BaseRequestHandler):
         except:
             self.chanels[chanelName] = {}
             (self.chanels[chanelName])[self.client_address] = self.request
-        log.info("'{}:{}' joined chanel: '{}'".format(
-            self.client_address[0], self.client_address[1], chanelName))
 
-    def ChanelLeave(self, chanelName):
-        sock: socket.socket = self.request
+        if not chanelName == 'Public':
+            self.success("Join channel '%s' succeeded" % chanelName)
+            log.info("'{}:{}' joined chanel: '{}'".format(
+                self.client_address[0], self.client_address[1], chanelName))
+
+    def ChanelLeave(self, chanelName: str) -> None:
         '''
         离开指定的频道
         '''
         try:
             self.chanels[chanelName].pop(self.client_address)
         except Exception as e:
-            sock.send(json.dumps({'chanel': 'Public', 'data': {
-                'code': 504, 'msg': '尚未加入此频道', 'type': 'message.error'}}).encode())
-            return e
+            self.error(504, 'You have not joined this channel')
+            return
 
-        sock.send(json.dumps({'chanel': 'Public', 'data': {
-            'code': 200, 'msg': "离开频道'%s'成功" % chanelName, 'type': 'message.succeed'}}).encode())
+        self.success("Leaving channel '%s' succeeded" % chanelName)
         log.info("'{}:{}' leaved chanel: '{}'".format(
             self.client_address[0], self.client_address[1], chanelName))
 
-    def ChanelSend(self, chanelName: str, DataString: str):
+    def ChanelSend(self, chanelName: str, DataString: str) -> bool:
         '''
         向指定的通道发送信息
         会将失效的连接踢出通道池
         '''
-        encodedData = str(DataString).encode()
+        encodedData = json.dumps(
+            {'chanel': chanelName, 'data': DataString}).encode()
         expc = []
         with self.lock:
             try:
