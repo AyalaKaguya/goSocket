@@ -118,35 +118,35 @@ class MainHandler(socketserver.BaseRequestHandler):
     def PublicExec(self, command: list) -> None:
         sock: socket.socket = self.request
         try:
-            if command[0] == 'send':
+            if command[0] == 'send': # 发送消息的逻辑
                 data = json.dumps({'target': '{}:{}'.format(
                     self.client_address[0], self.client_address[1]), 'type': 'msg', 'msg': command[1:]})
                 self.ChanelSend('Public', data)
                 return
-            elif command[0] == 'help':
+            elif command[0] == 'help': # 发送帮助文档
                 msg = help_document.encode()
                 sock.send(msg)
                 return
-            elif command[0] == 'join':
+            elif command[0] == 'join': # 加入频道的逻辑
                 if len(command) < 2:
                     self.error(502, 'Please enter the channel name')
                     return
                 self.ChanelJoin(command[1])
                 return
-            elif command[0] == 'leave':
+            elif command[0] == 'leave': # 离开频道的逻辑
                 if len(command) < 2:
                     self.error(502, 'Please enter the channel name')
                     return
                 self.ChanelLeave(command[1])
                 return
-            elif command[0] == 'back_def':
+            elif command[0] == 'back_def': # 发送返回码定义
                 msg = back_def_document.encode()
                 sock.send(msg)
                 return
 
             sock.send("Server Error:\n\tUndefined command '{}'\n\tType 'help' to get some commands.".format(
                 ' '.join(command)).encode())
-        except Exception as ex:
+        except Exception as ex: # 发生了未知的错误
             self.crash('Server Error！', ex)
             log.error("On exec error:'{}:{}' -> {}".format(
                 self.client_address[0], self.client_address[1], ex))
@@ -202,18 +202,18 @@ class MainHandler(socketserver.BaseRequestHandler):
         通道路由
         jsonData: 处理成功的原始信息
         '''
-        try:
+        try: # 找不到json的'chanel'属性
             if not jsonData['chanel'] in self.chanels:
                 self.error(501, 'There is no such channel')
                 return
-            try:
-                if not isinstance(jsonData['data'], str):
+            try: # 找不到json的'data'属性
+                if not isinstance(jsonData['data'], str): # data必须是字符串
                     self.error(505, 'Wrong data type')
                     return
             except:
                 self.error(506, 'You must specify parameters for data')
                 return
-            self.ChanelSend(jsonData['chanel'], jsonData['data'])
+            self.ChanelSend(jsonData['chanel'], jsonData['data']) # 发送消息
         except:
             self.error(503, 'Wrong parameter')
 
@@ -240,7 +240,7 @@ class MainHandler(socketserver.BaseRequestHandler):
             self.chanels[chanelName] = {}
             (self.chanels[chanelName])[self.client_address] = self.request
 
-        if not chanelName == 'Public':
+        if not chanelName == 'Public': # 不是public频道就发送消息
             self.success("Join channel '%s' succeeded" % chanelName)
             log.info("'{}:{}' joined chanel: '{}'".format(
                 self.client_address[0], self.client_address[1], chanelName))
@@ -265,16 +265,16 @@ class MainHandler(socketserver.BaseRequestHandler):
         会将失效的连接踢出通道池
         '''
         encodedData = json.dumps(
-            {'chanel': chanelName, 'data': DataString}).encode()
+            {'chanel': chanelName, 'data': DataString}).encode() # 构造发送数据
         expc = []
         with self.lock:
-            try:
+            try: # 通道不存在的情况
                 for c, sk in self.chanels[chanelName].items():
-                    try:
+                    try: # 客户端已下线等等
                         sk.send(encodedData)
                     except:
                         expc.append(c)
-                for c in expc:
+                for c in expc: # 剔除异常客户端
                     self.chanels[chanelName].pop(c)
                     self.clients.pop(c)
                 return True
