@@ -90,10 +90,11 @@ class MainHandler(socketserver.BaseRequestHandler):
             # 当不是json时当作指令处理
             try:
                 jsonData = json.loads(data)
-                self.ChanelRouter(jsonData)
             except:
                 self.PublicExec(data.split(' '))
                 continue
+
+            self.ChanelRouter(jsonData)
 
     def finish(self):
         super().finish()
@@ -287,6 +288,7 @@ if __name__ == "__main__":
     server.daemon_threads = True
     threading.Thread(target=server.serve_forever,
                      name="server", daemon=True).start()
+    log.info('Server start...')
     while True:
         cmd = input()
         if cmd.strip() == "close":
