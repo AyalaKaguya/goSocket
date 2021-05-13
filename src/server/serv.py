@@ -7,6 +7,7 @@ import json
 
 SERV = "127.0.0.1"
 PORT = 25538
+
 CodingFormat = "utf-8"  # 定义全局编码格式
 
 logging.basicConfig(format="%(asctime)s %(thread)d %(threadName)s %(message)s",

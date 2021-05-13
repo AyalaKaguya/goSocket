@@ -68,3 +68,4 @@ class go:
     def close(self):
         self._close = True
         self.socket.close()
+        del self
