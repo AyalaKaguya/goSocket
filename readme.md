@@ -36,10 +36,10 @@ if __name__ == "__main__":
 
 method|introduce
 ----|----
-subscribe(chanelName: str, func) -> go | 订阅一个通道，提供一个回调函数，一个通道只能订阅一个回调函数。
-unsubscribe(chanelName: str) -> go | 退订一个通道。
+subscribe(channelName: str, func) -> go | 订阅一个通道，提供一个回调函数，一个通道只能订阅一个回调函数。
+unsubscribe(channelName: str) -> go | 退订一个通道。
 cilet_forver() | 启动事件循环，建议使用多线程。
-send(chanelName: str, dataString: str) -> go | 向指定的通道发送信息。
+send(channelName: str, dataString: str) -> go | 向指定的通道发送信息。
 close() | 关闭并 `删除` 连接。
 
 ## 贡献 | Contribute

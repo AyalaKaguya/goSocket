@@ -9,7 +9,7 @@ __author__ = 'AyalaKaguya <ayalakaguya@outlook.com>'
 
 class go:
     lock = threading.Lock()
-    chanelServer = {}
+    channelServer = {}
     _close = False
 
     def __init__(self, server: str, port: int):
@@ -24,19 +24,19 @@ class go:
         except Exception as ex:
             raise Exception('Unable to connect to the server')
 
-    def subscribe(self, chanelName: str, func):
+    def subscribe(self, channelName: str, func):
         with self.lock:
-            self.chanelServer[chanelName] = func
-        self.socket.send(bytes('join %s' % chanelName, encoding="utf8"))
+            self.channelServer[channelName] = func
+        self.socket.send(bytes('join %s' % channelName, encoding="utf8"))
         return self
 
-    def unsubscribe(self, chanelName: str):
+    def unsubscribe(self, channelName: str):
         with self.lock:
             try:
-                self.chanelServer.pop(chanelName)
+                self.channelServer.pop(channelName)
             except Exception as ex:
                 raise Exception('Channel not yet subscribed')
-        self.socket.send(bytes('leave %s' % chanelName, encoding="utf8"))
+        self.socket.send(bytes('leave %s' % channelName, encoding="utf8"))
         return self
 
     def cilet_forver(self):
@@ -50,18 +50,18 @@ class go:
                 continue
 
             try:  # 路由消息
-                chanel = data['chanel']
+                channel = data['channel']
                 payload = data['data']
                 with self.lock:
-                    func = self.chanelServer[chanel]
+                    func = self.channelServer[channel]
                     func(payload)
             except Exception as ex:
                 continue
         return self
 
-    def send(self, chanelName: str, dataString: str):
+    def send(self, channelName: str, dataString: str):
         encodedData = json.dumps(
-            {'chanel': chanelName, 'data': dataString}).encode()  # 构造发送数据
+            {'channel': channelName, 'data': dataString}).encode()  # 构造发送数据
         self.socket.send(encodedData)
         return self
 
