@@ -1,1 +1,1 @@
-@echo off &python cile.py
+@echo off &python clie.py

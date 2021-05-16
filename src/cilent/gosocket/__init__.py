@@ -4,7 +4,7 @@ import sys
 import json
 
 
-class goSocketCilent:
+class goSocketclient:
     '''
     
     '''
@@ -40,7 +40,7 @@ class goSocketCilent:
         self.socket.send(bytes('leave %s' % channelName, encoding="utf8"))
         return self
 
-    def cilent_forever(self):
+    def client_forever(self):
         self._close = False
         while not self._close:
             accept_data = str(self.socket.recv(1024), encoding="utf8")
@@ -72,16 +72,16 @@ class goSocketCilent:
         del self
 
 
-def go(serv: str, port: int) -> goSocketCilent:
+def go(serv: str, port: int) -> goSocketclient:
     """
     创建一个goSocket客户端实例
 
     serv: 服务器地址
     port: 服务器端口
     """
-    return goSocketCilent(serv, port)
+    return goSocketclient(serv, port)
 
 
-__version__ = '1.0.2'
+__version__ = '1.0.3'
 __author__ = 'AyalaKaguya <ayalakaguya@outlook.com>'
-__all__ = ["goSocketCilent", "go"]
+__all__ = ["goSocketclient", "go"]

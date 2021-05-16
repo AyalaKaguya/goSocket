@@ -29,7 +29,7 @@ import gosocket
 if __name__ == "__main__":
     def abc(data: str):
         print(data)
-    gosocket.go('127.0.0.1', 25538).subscribe('mro', abc).cilet_forver()
+    gosocket.go('127.0.0.1', 25538).subscribe('mro', abc).client_forver()
 ```
 
 类 `go` 的一些方法：
@@ -40,7 +40,7 @@ method|introduce
 ----|----
 subscribe(channelName: str, func) -> go | 订阅一个通道，提供一个回调函数，一个通道只能订阅一个回调函数。
 unsubscribe(channelName: str) -> go | 退订一个通道。
-cilet_forver() | 启动事件循环，建议使用多线程。
+client_forver() | 启动事件循环，建议使用多线程。
 send(channelName: str, dataString: str) -> go | 向指定的通道发送信息。
 close() | 关闭并 `删除` 连接。
 

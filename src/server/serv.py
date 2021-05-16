@@ -7,10 +7,10 @@ import json
 
 SERV = "127.0.0.1"      # 服务器监听地址(一般不变)
 PORT = 25538            # 服务器的端口
-cilentSafety = True     # 在一定程度上保护客户端的安全性
+clientSafety = True     # 在一定程度上保护客户端的安全性
 CodingFormat = "utf-8"  # 定义全局编码格式
 
-__version__ = '1.0.2'
+__version__ = '1.0.3'
 __author__ = 'AyalaKaguya <ayalakaguya@outlook.com>'
 __all__ = ["GoHandler"]
 
@@ -61,7 +61,7 @@ class GoHandler(socketserver.BaseRequestHandler):
             self.clients[self.client_address] = self.request
             self.channelJoin()
 
-        if cilentSafety:
+        if clientSafety:
             self.sendAll(msg)
 
     def handle(self):
@@ -102,7 +102,7 @@ class GoHandler(socketserver.BaseRequestHandler):
             if self.client_address in self.clients:
                 self.clients.pop(self.client_address)
 
-        if cilentSafety:
+        if clientSafety:
             self.sendAll(msg)
 
         self.request.close()
@@ -114,8 +114,11 @@ class GoHandler(socketserver.BaseRequestHandler):
         command = rawCommand.split(' ')
         try:
             if command[0] == 'send':  # 发送消息的逻辑
-                data = json.dumps({'target': '{}:{}'.format(
-                    self.client_address[0], self.client_address[1]), 'type': 'msg', 'msg': rawCommand[4:]})
+                raw = {'type': 'msg', 'msg': rawCommand[4:]}
+                if clientSafety:
+                    raw['target'] = '{}:{}'.format(
+                        self.client_address[0], self.client_address[1])
+                data = json.dumps(raw)
                 self.channelSend('Public', data)
                 return
             elif command[0] == 'help':  # 发送帮助文档
