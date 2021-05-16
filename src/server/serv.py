@@ -12,20 +12,12 @@ CodingFormat = "utf-8"  # 定义全局编码格式
 
 __version__ = '1.0.2'
 __author__ = 'AyalaKaguya <ayalakaguya@outlook.com>'
-__all__ = [GoHandler]
+__all__ = ["GoHandler"]
 
 logging.basicConfig(format="%(asctime)s %(thread)d %(threadName)s %(message)s",
                     stream=sys.stdout, level=logging.INFO)
 log = logging.getLogger()
 
-
-'''
-Public 频道
-承载基础指令和错误反馈
-不接受json信息
-
-如果发送json，将会触发数据路由
-'''
 
 back_def_document = '''
 Return Code Definition：
@@ -45,8 +37,8 @@ Help Document:
     help                    Show help tips.
     exit                    Close this connection.
     back_def                Show return code definition.
-    join <channel Name>      Join a channel.
-    leave <channel Name>     Leave a channel.
+    join <channel Name>     Join a channel.
+    leave <channel Name>    Leave a channel.
 '''
 
 
