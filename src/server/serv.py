@@ -5,10 +5,14 @@ import socket
 import threading
 import json
 
-SERV = "127.0.0.1"
-PORT = 25538
-
+SERV = "127.0.0.1"      # 服务器监听地址(一般不变)
+PORT = 25538            # 服务器的端口
+cilentSafety = True     # 在一定程度上保护客户端的安全性
 CodingFormat = "utf-8"  # 定义全局编码格式
+
+__version__ = '1.0.2'
+__author__ = 'AyalaKaguya <ayalakaguya@outlook.com>'
+__all__ = [GoHandler]
 
 logging.basicConfig(format="%(asctime)s %(thread)d %(threadName)s %(message)s",
                     stream=sys.stdout, level=logging.INFO)
@@ -46,7 +50,7 @@ Help Document:
 '''
 
 
-class MainHandler(socketserver.BaseRequestHandler):
+class GoHandler(socketserver.BaseRequestHandler):
     lock = threading.Lock()  # 进程锁
     clients = {}  # 连接池
     channels = {'Public': {}}  # 通道池
@@ -56,19 +60,17 @@ class MainHandler(socketserver.BaseRequestHandler):
         self.event = threading.Event()
 
         msg = "Server:[{}:{}]:{}".format(
-            self.client_address[0], self.client_address[1], "加入了服务器").encode()
+            self.client_address[0], self.client_address[1], "加入了服务器")
 
         log.info("Connection:'{}:{}'".format(
             self.client_address[0], self.client_address[1]))
 
         with self.lock:
             self.clients[self.client_address] = self.request
-            for c, sk in self.clients.items():  # 递归连接池，连接发送信息
-                try:
-                    sk.send(msg)
-                except:
-                    pass
             self.channelJoin()
+
+        if cilentSafety:
+            self.sendAll(msg)
 
     def handle(self):
         super().handle()
@@ -92,7 +94,7 @@ class MainHandler(socketserver.BaseRequestHandler):
             try:
                 jsonData = json.loads(data)
             except:
-                self.PublicExec(data.split(' '))
+                self.PublicExec(data)
                 continue
 
             self.channelRouter(jsonData)
@@ -102,53 +104,52 @@ class MainHandler(socketserver.BaseRequestHandler):
         self.event.set()
 
         msg = "Server:[{}:{}]:{}".format(
-            self.client_address[0], self.client_address[1], "退出了服务器").encode()
+            self.client_address[0], self.client_address[1], "退出了服务器")
 
         with self.lock:
             if self.client_address in self.clients:
                 self.clients.pop(self.client_address)
-            for c, sk in self.clients.items():
-                try:
-                    sk.send(msg)
-                except:
-                    pass
+
+        if cilentSafety:
+            self.sendAll(msg)
 
         self.request.close()
         log.info("Exit:'{}:{}'".format(
             self.client_address[0], self.client_address[1]))
 
-    def PublicExec(self, command: list) -> None:
+    def PublicExec(self, rawCommand: str) -> None:
         sock: socket.socket = self.request
+        command = rawCommand.split(' ')
         try:
-            if command[0] == 'send': # 发送消息的逻辑
+            if command[0] == 'send':  # 发送消息的逻辑
                 data = json.dumps({'target': '{}:{}'.format(
-                    self.client_address[0], self.client_address[1]), 'type': 'msg', 'msg': command[1:]})
+                    self.client_address[0], self.client_address[1]), 'type': 'msg', 'msg': rawCommand[4:]})
                 self.channelSend('Public', data)
                 return
-            elif command[0] == 'help': # 发送帮助文档
+            elif command[0] == 'help':  # 发送帮助文档
                 msg = help_document.encode()
                 sock.send(msg)
                 return
-            elif command[0] == 'join': # 加入频道的逻辑
+            elif command[0] == 'join':  # 加入频道的逻辑
                 if len(command) < 2:
                     self.error(502, 'Please enter the channel name')
                     return
                 self.channelJoin(command[1])
                 return
-            elif command[0] == 'leave': # 离开频道的逻辑
+            elif command[0] == 'leave':  # 离开频道的逻辑
                 if len(command) < 2:
                     self.error(502, 'Please enter the channel name')
                     return
                 self.channelLeave(command[1])
                 return
-            elif command[0] == 'back_def': # 发送返回码定义
+            elif command[0] == 'back_def':  # 发送返回码定义
                 msg = back_def_document.encode()
                 sock.send(msg)
                 return
 
             sock.send("Server Error:\n\tUndefined command '{}'\n\tType 'help' to get some commands.".format(
                 ' '.join(command)).encode())
-        except Exception as ex: # 发生了未知的错误
+        except Exception as ex:  # 发生了未知的错误
             self.crash('Server Error！', ex)
             log.error("On exec error:'{}:{}' -> {}".format(
                 self.client_address[0], self.client_address[1], ex))
@@ -204,18 +205,18 @@ class MainHandler(socketserver.BaseRequestHandler):
         通道路由
         jsonData: 处理成功的原始信息
         '''
-        try: # 找不到json的'channel'属性
+        try:  # 找不到json的'channel'属性
             if not jsonData['channel'] in self.channels:
                 self.error(501, 'There is no such channel')
                 return
-            try: # 找不到json的'data'属性
-                if not isinstance(jsonData['data'], str): # data必须是字符串
+            try:  # 找不到json的'data'属性
+                if not isinstance(jsonData['data'], str):  # data必须是字符串
                     self.error(505, 'Wrong data type')
                     return
             except:
                 self.error(506, 'You must specify parameters for data')
                 return
-            self.channelSend(jsonData['channel'], jsonData['data']) # 发送消息
+            self.channelSend(jsonData['channel'], jsonData['data'])  # 发送消息
         except:
             self.error(503, 'Wrong parameter')
 
@@ -242,7 +243,7 @@ class MainHandler(socketserver.BaseRequestHandler):
             self.channels[channelName] = {}
             (self.channels[channelName])[self.client_address] = self.request
 
-        if not channelName == 'Public': # 不是public频道就发送消息
+        if not channelName == 'Public':  # 不是public频道就发送消息
             self.success("Join channel '%s' succeeded" % channelName)
             log.info("'{}:{}' joined channel: '{}'".format(
                 self.client_address[0], self.client_address[1], channelName))
@@ -267,16 +268,16 @@ class MainHandler(socketserver.BaseRequestHandler):
         会将失效的连接踢出通道池
         '''
         encodedData = json.dumps(
-            {'channel': channelName, 'data': DataString}).encode() # 构造发送数据
+            {'channel': channelName, 'data': DataString}).encode()  # 构造发送数据
         expc = []
         with self.lock:
-            try: # 通道不存在的情况
+            try:  # 通道不存在的情况
                 for c, sk in self.channels[channelName].items():
-                    try: # 客户端已下线等等
+                    try:  # 客户端已下线等等
                         sk.send(encodedData)
                     except:
                         expc.append(c)
-                for c in expc: # 剔除异常客户端
+                for c in expc:  # 剔除异常客户端
                     self.channels[channelName].pop(c)
                     self.clients.pop(c)
                 return True
@@ -285,11 +286,11 @@ class MainHandler(socketserver.BaseRequestHandler):
 
 
 if __name__ == "__main__":
-    server = socketserver.ThreadingTCPServer((SERV, PORT), MainHandler)
+    server = socketserver.ThreadingTCPServer((SERV, PORT), GoHandler)
     server.daemon_threads = True
     threading.Thread(target=server.serve_forever,
                      name="server", daemon=True).start()
-    log.info('Server start...')
+    log.info('Server is starting...')
     while True:
         cmd = input()
         if cmd.strip() == "close":

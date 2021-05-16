@@ -3,10 +3,6 @@ import threading
 import sys
 import json
 
-__version__ = '1.0.0'
-__author__ = 'AyalaKaguya <ayalakaguya@outlook.com>'
-
-
 class go:
     lock = threading.Lock()
     channelServer = {}
@@ -39,7 +35,7 @@ class go:
         self.socket.send(bytes('leave %s' % channelName, encoding="utf8"))
         return self
 
-    def cilet_forver(self):
+    def cilent_forever(self):
         self._close = False
         while not self._close:
             accept_data = str(self.socket.recv(1024), encoding="utf8")
